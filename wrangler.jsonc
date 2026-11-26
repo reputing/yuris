@@ -6,12 +6,16 @@
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
   "observability": { "enabled": true },
-  // Published at yuris.<your-subdomain>.workers.dev. To use yuri.xxx, add the domain to this Cloudflare account and then:
-  //   "routes": [{ "pattern": "yuri.xxx", "custom_domain": true }]
+  // Also reachable at yuris.<account-subdomain>.workers.dev. The yuri.xxx zone is in this account and its
+  // apex and www already carry the proxied placeholder records, so plain routes attach the Worker to them.
   "workers_dev": true,
+  "routes": [
+    { "pattern": "yuri.xxx/*", "zone_name": "yuri.xxx" },
+    { "pattern": "www.yuri.xxx/*", "zone_name": "yuri.xxx" }
+  ],
   // The Deploy workflow creates this database on the first run and writes its id here (scripts/ci-d1.sh).
   "d1_databases": [
-    { "binding": "DB", "database_name": "yuris", "database_id": "REPLACE_WITH_D1_ID", "migrations_dir": "migrations" }
+    { "binding": "DB", "database_name": "yuris", "database_id": "db1cf472-0374-46ac-b941-71e63911ee37", "migrations_dir": "migrations" }
   ],
   // Secrets (never put these here): ADMIN_TOKEN = the bearer token for /api/admin/*
   "vars": { "SITE_NAME": "yuri.xxx" }

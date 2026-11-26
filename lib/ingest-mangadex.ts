@@ -25,23 +25,34 @@ export function toWork(m: any) {
   };
 }
 
-export async function ingestMangaDex(db: Db, f: typeof fetch = fetch, opts: { pages?: number; log?: (s: string) => void } = {}) {
-  const stats = { seen: 0, published: 0, held: 0, blocked: 0 };
-  const pages = opts.pages ?? 5;
-  for (let p = 0; p < pages; p++) {
-    const url = `${API}/manga?includedTags[]=${GIRLS_LOVE_TAG}&contentRating[]=erotica&contentRating[]=pornographic&includes[]=cover_art&includes[]=author&order[followedCount]=desc&limit=100&offset=${p * 100}`;
-    const res = await f(url, { headers: { "user-agent": "yuri.xxx-indexer/1.0", accept: "application/json" } });
-    if (!res.ok) { opts.log?.(`MangaDex answered ${res.status}, stopping`); break; }
-    const body = (await res.json()) as { data?: any[] };
-    const data = body.data ?? [];
-    for (const m of data) {
-      stats.seen++;
-      const r = await addWork(db, toWork(m));
-      if (r.status === "published") stats.published++; else if (r.status === "pending") stats.held++; else stats.blocked++;
-    }
-    opts.log?.(`page ${p + 1}: ${data.length} works`);
-    if (data.length < 100) break;
-    await new Promise((r) => setTimeout(r, 400)); // be gentle with their API
+export interface IngestStats { seen: number; published: number; held: number; blocked: number }
+
+/** One batch: `limit` works starting at `offset` (MangaDex pages are capped at 100). Small batches keep a single
+ *  Worker request inside D1's per-request query budget. `next` is null when the list has run out. */
+export async function ingestPage(db: Db, f: typeof fetch = fetch, offset = 0, limit = 20): Promise<{ stats: IngestStats; next: number | null; error?: string }> {
+  const stats: IngestStats = { seen: 0, published: 0, held: 0, blocked: 0 };
+  const url = `${API}/manga?includedTags[]=${GIRLS_LOVE_TAG}&contentRating[]=erotica&contentRating[]=pornographic&includes[]=cover_art&includes[]=author&order[followedCount]=desc&limit=${Math.min(100, limit)}&offset=${offset}`;
+  const res = await f(url, { headers: { "user-agent": "yuri.xxx-indexer/1.0", accept: "application/json" } });
+  if (!res.ok) return { stats, next: null, error: `MangaDex answered ${res.status}` };
+  const data = ((await res.json()) as { data?: any[] }).data ?? [];
+  for (const m of data) {
+    stats.seen++;
+    const r = await addWork(db, toWork(m));
+    if (r.status === "published") stats.published++; else if (r.status === "pending") stats.held++; else stats.blocked++;
   }
-  return stats;
+  return { stats, next: data.length < Math.min(100, limit) || offset + data.length >= 10000 ? null : offset + data.length };
+}
+
+export async function ingestMangaDex(db: Db, f: typeof fetch = fetch, opts: { pages?: number; log?: (s: string) => void } = {}) {
+  const total: IngestStats = { seen: 0, published: 0, held: 0, blocked: 0 };
+  let offset: number | null = 0;
+  for (let p = 0; p < (opts.pages ?? 5) && offset !== null; p++) {
+    const r = await ingestPage(db, f, offset, 100);
+    if (r.error) { opts.log?.(r.error + ", stopping"); break; }
+    for (const k of Object.keys(total) as (keyof IngestStats)[]) total[k] += r.stats[k];
+    opts.log?.(`page ${p + 1}: ${r.stats.seen} works`);
+    offset = r.next;
+    if (offset !== null) await new Promise((res) => setTimeout(res, 400)); // be gentle with their API
+  }
+  return total;
 }
