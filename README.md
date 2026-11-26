@@ -33,14 +33,20 @@ npm run dev                         # http://localhost:3000
 npm test && npm run typecheck
 ```
 
-## Deploy
-```
-npx wrangler d1 create yuris        # paste the id into wrangler.jsonc
-npm run db:migrate
-npx wrangler secret put ADMIN_TOKEN
-npm run deploy
-npm run ingest:mangadex && npx wrangler d1 execute yuris --remote --file ingest.sql
-```
+## Deploy (automatic)
+Every push to `main` runs `.github/workflows/deploy.yml`: typecheck, tests, create the D1 database if it doesn't exist
+(`scripts/ci-d1.sh`), apply migrations, build, publish to Cloudflare Workers. One-time setup: add these repository secrets
+(Settings, Secrets and variables, Actions):
+
+| Secret | What |
+|---|---|
+| `CLOUDFLARE_ACCOUNT_ID` | your Cloudflare account id |
+| `CLOUDFLARE_API_TOKEN` | token with Workers Scripts: Edit and D1: Edit (add Workers Routes: Edit for a custom domain) |
+| `ADMIN_TOKEN` (optional) | bearer token for `/api/admin/*`; without it the admin routes stay closed |
+
+It goes live at `yuris.<your-subdomain>.workers.dev`. For yuri.xxx, add the domain to the same Cloudflare account and uncomment
+the `routes` line in `wrangler.jsonc`. First catalogue fill, once deployed:
+`npm run ingest:mangadex && npx wrangler d1 execute yuris --remote --file ingest.sql`.
 
 ## Not done yet
 - **Real age verification.** The gate is a self-declaration. The UK, the EU and a growing list of US states expect more for a

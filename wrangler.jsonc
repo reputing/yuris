@@ -6,7 +6,10 @@
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
   "observability": { "enabled": true },
-  // Create it with: npx wrangler d1 create yuris   then paste the id below.
+  // Published at yuris.<your-subdomain>.workers.dev. To use yuri.xxx, add the domain to this Cloudflare account and then:
+  //   "routes": [{ "pattern": "yuri.xxx", "custom_domain": true }]
+  "workers_dev": true,
+  // The Deploy workflow creates this database on the first run and writes its id here (scripts/ci-d1.sh).
   "d1_databases": [
     { "binding": "DB", "database_name": "yuris", "database_id": "REPLACE_WITH_D1_ID", "migrations_dir": "migrations" }
   ],
